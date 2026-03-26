@@ -11,7 +11,7 @@ from skills.classifier import (
     run_technical_analyst,
     run_signal_composer,
 )
-from skills.notifier import send_email_alert
+from skills.notifier import handle_alert
 
 
 def build_price_data(gold_price: str, levels: dict | None, indicators: dict | None) -> str:
@@ -84,12 +84,24 @@ def run():
     print("  FINAL ALERT")
     print("════════════════════════════════════")
 
+    signal = tech.get("signal", "HOLD")
+
+    # Override signal if news urgency is high
+    if news.get("urgency", 0) >= 7:
+        signal = news.get("direction", "HOLD")
+
     if alert.strip() == "NO_ALERT":
-        print("  No alert — signals not strong enough")
-    else:
-        print(alert)
-        print()
-        send_email_alert(alert, gold_price)
+        signal = "NO_ALERT"
+
+    print(alert if alert.strip() != "NO_ALERT" else "  No trade signal")
+    print()
+    handle_alert(alert, gold_price, signal)
+    # if alert.strip() == "NO_ALERT":
+    #     print("  No alert — signals not strong enough")
+    # else:
+    #     print(alert)
+    #     print()
+    #     send_email_alert(alert, gold_price)
 
 
 if __name__ == "__main__":
