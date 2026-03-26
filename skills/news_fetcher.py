@@ -26,7 +26,7 @@ def fetch_finnhub_news() -> list[str]:
     )
     articles = response.json()
 
-    cutoff = datetime.now(timezone.utc).timestamp() - 86400  # last 24 hours
+    cutoff = datetime.now(timezone.utc).timestamp() - 7200  # last 24 hours
 
     relevant = [
         f"- {a['headline']}"
