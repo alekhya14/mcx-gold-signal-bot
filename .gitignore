@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+.DS_Store
+newenv/
+venv/
+*.egg-info/
+test.py
+test_skills.py
