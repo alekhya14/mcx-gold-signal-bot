@@ -9,6 +9,7 @@ METALS_DEV_KEY  = os.getenv("METALS_DEV_API_KEY")
 GMAIL_USER      = os.getenv("GMAIL_USER")
 GMAIL_APP_PASS  = os.getenv("GMAIL_APP_PASS")
 ALERT_EMAIL     = os.getenv("ALERT_EMAIL")
+MCX_CORRECTION = 1.0522
 
 # Validate all keys are present on startup
 def validate_config():

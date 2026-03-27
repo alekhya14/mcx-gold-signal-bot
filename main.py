@@ -5,10 +5,12 @@ from skills.price_fetcher import (
     fetch_mcx_gold_price,
     fetch_pivot_levels,
     fetch_technical_indicators,
+    fetch_positional_indicators,
 )
 from skills.classifier import (
     run_news_classifier,
     run_technical_analyst,
+    run_positional_analyst,
     run_signal_composer,
 )
 from skills.notifier import handle_alert
@@ -33,21 +35,83 @@ Previous session: High ₹{levels['prev_high']:,.0f} | Low ₹{levels['prev_low'
 
     if indicators:
         rsi_label = (
-            "— overbought" if indicators['rsi'] > 70
-            else "— oversold" if indicators['rsi'] < 30
+            "— overbought, avoid longs" if indicators['rsi'] > 70
+            else "— oversold, avoid shorts" if indicators['rsi'] < 30
+            else "— bullish momentum" if indicators['rsi'] > 55
+            else "— bearish momentum" if indicators['rsi'] < 45
             else "— neutral"
         )
+
+        vwap_bias = (
+            "price above VWAP — bullish intraday bias"
+            if indicators['price_vs_vwap'] > 0
+            else "price below VWAP — bearish intraday bias"
+        )
+
         parts.append(f"""
-Momentum indicators (15min candles):
-- RSI(14)  : {indicators['rsi']} {rsi_label}
-- EMA9     : ₹{indicators['ema9']:,.0f}
-- EMA21    : ₹{indicators['ema21']:,.0f}
-- EMA cross: {indicators['ema_cross']}
-- MACD     : {indicators['macd_signal']} ({indicators['macd_cross']})
+    Intraday momentum indicators (GC=F 15min — momentum signals valid,
+    price levels approximate until Angel One MCX data connected):
+    - RSI(14)        : {indicators['rsi']} {rsi_label}
+    - EMA9           : ₹{indicators['ema9']:,.0f} (approximate)
+    - EMA21          : ₹{indicators['ema21']:,.0f} (approximate)
+    - EMA cross      : {indicators['ema_cross']}
+    - MACD           : {indicators['macd_signal']} ({indicators['macd_cross']})
+    - VWAP direction : {vwap_bias}
+    - VWAP cross     : {indicators['vwap_cross']}
+
+    NOTE: Use RSI/EMA/MACD direction for signal, ignore absolute price levels
+    until MCX-specific data source connected.
+            """.strip())
+
+    return "\n\n".join(parts)
+
+def build_positional_data(
+    gold_price  : str,
+    positional  : dict | None
+) -> str:
+    """Assemble price context for positional Skill 2b."""
+    parts = [f"Current MCX Gold price: {gold_price}"]
+
+    if positional:
+        trend = "UPTREND" if positional.get("uptrend") else "DOWNTREND"
+        adx_label = "trending" if positional.get("adx", 0) > 25 else "ranging"
+
+        parts.append(f"""
+Daily indicators (positional):
+- RSI(14)    : {positional['rsi']}
+- EMA20      : ₹{positional['ema20']:,.0f}
+- EMA50      : ₹{positional['ema50']:,.0f}
+- EMA200     : ₹{positional['ema200']:,.0f} — {trend}
+- EMA cross  : {positional['ema_cross']}
+- MACD       : {positional['macd_signal']} ({positional['macd_cross']})
+- ADX        : {positional['adx']} ({adx_label})
+
+Daily pivot levels:
+- Pivot      : ₹{positional['pivot']:,.0f}
+- R1 / R2    : ₹{positional['r1']:,.0f} / ₹{positional['r2']:,.0f}
+- R3         : ₹{positional['r3']:,.0f}
+- S1 / S2    : ₹{positional['s1']:,.0f} / ₹{positional['s2']:,.0f}
+- S3         : ₹{positional['s3']:,.0f}
+
+Previous session:
+- High       : ₹{positional['prev_high']:,.0f}
+- Low        : ₹{positional['prev_low']:,.0f}
+- Close      : ₹{positional['prev_close']:,.0f}
         """.strip())
 
     return "\n\n".join(parts)
 
+def extract_signal_tier(alert: str) -> str:
+    """Derive signal tier from what the composer actually wrote."""
+    text = alert.strip()
+    if text == "NO_ALERT":                          return "NO_ALERT"
+    if "STRONG BUY"  in text:                      return "STRONG_BUY"
+    if "STRONG SELL" in text:                       return "STRONG_SELL"
+    if "[Can Buy]"   in text:                       return "WEAK_BUY"
+    if "[Can Sell]"  in text:                       return "WEAK_SELL"
+    if "News Alert"  in text.lower():               return "NEWS_ALERT"
+    if "watch only"  in text.lower():               return "WATCH_ONLY"
+    return "HOLD"
 
 def run():
     print("\n════════════════════════════════════")
@@ -63,61 +127,71 @@ def run():
         print("  No headlines — exiting")
         return
 
-    print("[ Fetching price + indicators... ]")
+    print("\n[ Fetching price + indicators... ]")
     gold_price, inr_per_oz = fetch_mcx_gold_price()
-    levels                 = fetch_pivot_levels(inr_per_oz)
-    indicators             = fetch_technical_indicators(inr_per_oz)
-    price_data             = build_price_data(gold_price, levels, indicators)
 
-    # ── Run skills ────────────────────────────────────────────────
+    # Intraday data (15min candles + VWAP)
+    intraday   = fetch_technical_indicators(inr_per_oz)
+
+    # Positional data (daily candles + pivot levels)
+    positional = fetch_positional_indicators(inr_per_oz)
+
+    # ── Skill 1: News classifier (shared by both) ─────────────────
     print("\n[ Skill 1 — News Classifier ]")
     news = run_news_classifier(headlines)
 
-    print("\n[ Skill 2 — Technical Analyst ]")
-    tech = run_technical_analyst(price_data)
+    # ── Skill 2a: Intraday analyst ────────────────────────────────
+    print("\n[ Skill 2a — Intraday Analyst (15min + VWAP) ]")
+    intraday_data = build_price_data(gold_price, None, intraday)
+    intraday_tech = run_technical_analyst(intraday_data)
 
-    print("\n[ Skill 3 — Signal Composer ]")
-    alert = run_signal_composer(tech, news)
+    # ── Skill 2b: Positional analyst ──────────────────────────────
+    print("\n[ Skill 2b — Positional Analyst (daily) ]")
+    positional_data = build_positional_data(gold_price, positional)
+    positional_tech = run_positional_analyst(positional_data)
 
-    # ── Send alert ────────────────────────────────────────────────
+    # ── Skill 3a: Compose intraday alert ──────────────────────────
+    print("\n[ Skill 3a — Intraday Signal Composer ]")
+    intraday_alert = run_signal_composer(intraday_tech, news)
+
+    # ── Skill 3b: Compose positional alert ────────────────────────
+    print("\n[ Skill 3b — Positional Signal Composer ]")
+    positional_alert = run_signal_composer(positional_tech, news)
+
+    # ── Send alerts independently ─────────────────────────────────
     print("\n════════════════════════════════════")
-    print("  FINAL ALERT")
+    print("  INTRADAY ALERT")
     print("════════════════════════════════════")
 
-    tech_signal = tech.get("signal", "HOLD")
-    news_dir = news.get("direction", "NEUTRAL")
-    news_urgency = news.get("urgency", 0)
+    intraday_signal = extract_signal_tier(intraday_alert)
+    print(intraday_alert if intraday_alert.strip() != "NO_ALERT"
+          else "  No intraday signal")
 
-    # Determine signal tier for notifier routing
-    alert_text = alert.strip()
+    print("\n════════════════════════════════════")
+    print("  POSITIONAL ALERT")
+    print("════════════════════════════════════")
 
-    if alert_text == "NO_ALERT":
-        signal = "NO_ALERT"
-    elif "STRONG BUY" in alert_text:
-        signal = "STRONG_BUY"
-    elif "STRONG SELL" in alert_text:
-        signal = "STRONG_SELL"
-    elif "[Can Buy]" in alert_text:
-        signal = "WEAK_BUY"
-    elif "[Can Sell]" in alert_text:
-        signal = "WEAK_SELL"
-    elif "News Alert" in alert_text or "news alert" in alert_text.lower():
-        signal = "NEWS_ALERT"
-    elif "watch only" in alert_text.lower():
-        signal = "WATCH_ONLY"
-    else:
-        signal = "HOLD"
+    positional_signal = extract_signal_tier(positional_alert)
+    print(positional_alert if positional_alert.strip() != "NO_ALERT"
+          else "  No positional signal")
 
-    print(alert if alert.strip() != "NO_ALERT" else "  No trade signal")
     print()
-    handle_alert(alert, gold_price, signal)
-    # if alert.strip() == "NO_ALERT":
-    #     print("  No alert — signals not strong enough")
-    # else:
-    #     print(alert)
-    #     print()
-    #     send_email_alert(alert, gold_price)
 
+    # Send intraday email
+    handle_alert(
+        alert      = intraday_alert,
+        gold_price = gold_price,
+        signal     = intraday_signal,
+        prefix     = "Intraday"
+    )
+
+    # Send positional email independently
+    handle_alert(
+        alert      = positional_alert,
+        gold_price = gold_price,
+        signal     = positional_signal,
+        prefix     = "Positional"
+    )
 
 if __name__ == "__main__":
     run()
