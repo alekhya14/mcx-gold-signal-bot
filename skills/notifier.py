@@ -50,25 +50,41 @@ def handle_alert(alert: str, gold_price: str, signal: str) -> bool:
     mins_since_last = (now - last) / 60
 
     # Determine signal tier
+    # is_strong = signal in ("STRONG_BUY", "STRONG_SELL")
+    # is_weak   = signal in ("WEAK_BUY", "WEAK_SELL", "CAN_BUY", "CAN_SELL")
+    # is_news   = signal == "NEWS_ALERT"
+    # is_trade_signal = is_strong or is_weak or is_news
+
     is_strong = signal in ("STRONG_BUY", "STRONG_SELL")
-    is_weak   = signal in ("WEAK_BUY", "WEAK_SELL", "CAN_BUY", "CAN_SELL")
-    is_news   = signal == "NEWS_ALERT"
-    is_trade_signal = is_strong or is_weak or is_news
+    is_weak = signal in ("WEAK_BUY", "WEAK_SELL")
+    is_news = signal == "NEWS_ALERT"
+    is_watch = signal == "WATCH_ONLY"
+    is_trade_signal = is_strong or is_weak or is_news or is_watch
 
     is_heartbeat_due = mins_since_last >= 60
 
     timestamp = datetime.now().strftime('%d %b %Y, %I:%M %p IST')
 
     if is_trade_signal:
-        # Subject line varies by tier so Gmail filters work
         if is_strong:
             direction = "BUY" if "BUY" in signal else "SELL"
-            subject   = f"MCX Gold {direction} — {gold_price}"
+            subject = f"MCX Gold {direction} — {gold_price}"
         elif is_weak:
             direction = "Can Buy" if "BUY" in signal else "Can Sell"
-            subject   = f"MCX Gold [{direction}] — {gold_price}"
+            subject = f"MCX Gold [{direction}] — {gold_price}"
+        elif is_watch:
+            subject = f"MCX Gold — Watch Only — {gold_price}"
         else:
-            subject   = f"MCX Gold — News Alert — {gold_price}"
+            subject = f"MCX Gold — News Alert — {gold_price}"
+        # Subject line varies by tier so Gmail filters work
+        # if is_strong:
+        #     direction = "BUY" if "BUY" in signal else "SELL"
+        #     subject   = f"MCX Gold {direction} — {gold_price}"
+        # elif is_weak:
+        #     direction = "Can Buy" if "BUY" in signal else "Can Sell"
+        #     subject   = f"MCX Gold [{direction}] — {gold_price}"
+        # else:
+        #     subject   = f"MCX Gold — News Alert — {gold_price}"
 
         body = f"""{alert}
 

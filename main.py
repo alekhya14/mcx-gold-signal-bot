@@ -89,18 +89,22 @@ def run():
     news_urgency = news.get("urgency", 0)
 
     # Determine signal tier for notifier routing
-    if alert.strip() == "NO_ALERT":
+    alert_text = alert.strip()
+
+    if alert_text == "NO_ALERT":
         signal = "NO_ALERT"
-    elif news_urgency >= 7:
-        signal = "NEWS_ALERT"
-    elif tech_signal == "STRONG_BUY" and news_dir == "BULLISH":
+    elif "STRONG BUY" in alert_text:
         signal = "STRONG_BUY"
-    elif tech_signal == "STRONG_SELL" and news_dir == "BEARISH":
+    elif "STRONG SELL" in alert_text:
         signal = "STRONG_SELL"
-    elif "BUY" in tech_signal or (news_dir == "BULLISH" and "SELL" not in tech_signal):
+    elif "[Can Buy]" in alert_text:
         signal = "WEAK_BUY"
-    elif "SELL" in tech_signal or (news_dir == "BEARISH" and "BUY" not in tech_signal):
+    elif "[Can Sell]" in alert_text:
         signal = "WEAK_SELL"
+    elif "News Alert" in alert_text or "news alert" in alert_text.lower():
+        signal = "NEWS_ALERT"
+    elif "watch only" in alert_text.lower():
+        signal = "WATCH_ONLY"
     else:
         signal = "HOLD"
 
