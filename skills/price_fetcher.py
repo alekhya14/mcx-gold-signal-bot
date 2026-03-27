@@ -25,7 +25,7 @@ def fetch_mcx_gold_price() -> tuple[str, float]:
         # futures premium and USD/INR differential
         # Calibrated on 27 Mar 2026 against actual MCX price
         # TODO: Recalibrate monthly or when Angel One API is connected
-        MCX_CORRECTION = 1.0516
+        MCX_CORRECTION = 1.0522
 
         inr_per_10g = round((inr_per_oz / 31.1035) * 10 * MCX_CORRECTION, -1)
         # inr_per_10g = round((inr_per_oz / 31.1035) * 10, -1)
