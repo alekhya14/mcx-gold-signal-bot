@@ -38,11 +38,10 @@ def send_email(subject: str, body: str):
 
     print(f"  ✓ Email sent: {subject}")
 
-
-def handle_alert(alert: str, gold_price: str, signal: str):
+def handle_alert(alert: str, gold_price: str, signal: str) -> bool:
     """
     Send email if:
-    - Signal is BUY or SELL (always send)
+    - Signal is any actionable tier (STRONG or WEAK)
     - No email sent in last 60 minutes (heartbeat)
     """
     state = load_state()
@@ -50,14 +49,28 @@ def handle_alert(alert: str, gold_price: str, signal: str):
     last  = state.get("last_email_ts", 0)
     mins_since_last = (now - last) / 60
 
-    is_trade_signal  = signal in ("BUY", "SELL")
+    # Determine signal tier
+    is_strong = signal in ("STRONG_BUY", "STRONG_SELL")
+    is_weak   = signal in ("WEAK_BUY", "WEAK_SELL", "CAN_BUY", "CAN_SELL")
+    is_news   = signal == "NEWS_ALERT"
+    is_trade_signal = is_strong or is_weak or is_news
+
     is_heartbeat_due = mins_since_last >= 60
 
     timestamp = datetime.now().strftime('%d %b %Y, %I:%M %p IST')
 
     if is_trade_signal:
-        subject = f"MCX Gold {signal} — {gold_price}"
-        body    = f"""{alert}
+        # Subject line varies by tier so Gmail filters work
+        if is_strong:
+            direction = "BUY" if "BUY" in signal else "SELL"
+            subject   = f"MCX Gold {direction} — {gold_price}"
+        elif is_weak:
+            direction = "Can Buy" if "BUY" in signal else "Can Sell"
+            subject   = f"MCX Gold [{direction}] — {gold_price}"
+        else:
+            subject   = f"MCX Gold — News Alert — {gold_price}"
+
+        body = f"""{alert}
 
 ---
 Price : {gold_price}
@@ -66,6 +79,8 @@ Time  : {timestamp}
         send_email(subject, body)
         state["last_email_ts"] = now
         state["last_signal"]   = signal
+        save_state(state)
+        return True
 
     elif is_heartbeat_due:
         subject = f"MCX Gold — Bot alive, no signal ({gold_price})"
@@ -78,9 +93,11 @@ Bot is running normally.
 """
         send_email(subject, body)
         state["last_email_ts"] = now
+        save_state(state)
+        return True
 
     else:
-        print(f"  → No email — signal is {signal}, "
+        print(f"  → No email — {signal}, "
               f"{int(mins_since_last)} mins since last email")
-
-    save_state(state)
+        save_state(state)
+        return False

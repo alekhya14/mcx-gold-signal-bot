@@ -84,14 +84,25 @@ def run():
     print("  FINAL ALERT")
     print("════════════════════════════════════")
 
-    signal = tech.get("signal", "HOLD")
+    tech_signal = tech.get("signal", "HOLD")
+    news_dir = news.get("direction", "NEUTRAL")
+    news_urgency = news.get("urgency", 0)
 
-    # Override signal if news urgency is high
-    if news.get("urgency", 0) >= 7:
-        signal = news.get("direction", "HOLD")
-
+    # Determine signal tier for notifier routing
     if alert.strip() == "NO_ALERT":
         signal = "NO_ALERT"
+    elif news_urgency >= 7:
+        signal = "NEWS_ALERT"
+    elif tech_signal == "STRONG_BUY" and news_dir == "BULLISH":
+        signal = "STRONG_BUY"
+    elif tech_signal == "STRONG_SELL" and news_dir == "BEARISH":
+        signal = "STRONG_SELL"
+    elif "BUY" in tech_signal or (news_dir == "BULLISH" and "SELL" not in tech_signal):
+        signal = "WEAK_BUY"
+    elif "SELL" in tech_signal or (news_dir == "BEARISH" and "BUY" not in tech_signal):
+        signal = "WEAK_SELL"
+    else:
+        signal = "HOLD"
 
     print(alert if alert.strip() != "NO_ALERT" else "  No trade signal")
     print()
