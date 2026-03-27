@@ -20,7 +20,15 @@ def fetch_mcx_gold_price() -> tuple[str, float]:
 
     try:
         inr_per_oz  = data["metals"]["gold"]
-        inr_per_10g = round((inr_per_oz / 31.1035) * 10, -1)
+
+        # MCX correction factor — accounts for import duty,
+        # futures premium and USD/INR differential
+        # Calibrated on 27 Mar 2026 against actual MCX price
+        # TODO: Recalibrate monthly or when Angel One API is connected
+        MCX_CORRECTION = 1.0516
+
+        inr_per_10g = round((inr_per_oz / 31.1035) * 10 * MCX_CORRECTION, -1)
+        # inr_per_10g = round((inr_per_oz / 31.1035) * 10, -1)
         price_str   = f"₹{inr_per_10g:,.0f}"
         print(f"  MCX Gold   : {price_str}")
         return price_str, inr_per_oz
