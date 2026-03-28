@@ -5,6 +5,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
+MCX_CORRECTION = 1.0522
 
 # ── Fetch data ─────────────────────────────────────────────────────
 
@@ -37,6 +38,9 @@ def calculate_rsi(close: pd.Series, period: int = 14) -> pd.Series:
 def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """Add RSI, EMA9, EMA21, MACD to dataframe."""
     close       = df["Close"]
+    high = df["High"]
+    low = df["Low"]
+
     df["rsi"]   = calculate_rsi(close)
     df["ema9"]  = close.ewm(span=9,  adjust=False).mean()
     df["ema21"] = close.ewm(span=21, adjust=False).mean()
@@ -45,6 +49,20 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     ema26         = close.ewm(span=26, adjust=False).mean()
     df["macd"]    = ema12 - ema26
     df["signal"]  = df["macd"].ewm(span=9, adjust=False).mean()
+
+    tr    = pd.concat([
+        high - low,
+        (high - close.shift()).abs(),
+        (low  - close.shift()).abs()
+    ], axis=1).max(axis=1)
+
+    dm_plus  = high.diff().clip(lower=0)
+    dm_minus = (-low.diff()).clip(lower=0)
+    atr      = tr.rolling(14).mean()
+    di_plus  = (dm_plus.rolling(14).mean()  / atr) * 100
+    di_minus = (dm_minus.rolling(14).mean() / atr) * 100
+    dx       = ((di_plus - di_minus).abs() / (di_plus + di_minus)) * 100
+    df["adx"] = dx.rolling(14).mean()
 
     return df
 
@@ -73,10 +91,21 @@ def calculate_daily_pivots(df: pd.DataFrame) -> pd.DataFrame:
 
     return df.join(daily_hourly)
 
-
+def is_uptrend(df: pd.DataFrame, idx: int, lookback: int = 200) -> bool:
+    """
+    Strong uptrend: price > 200 EMA by at least 1%.
+    In this case avoid ALL sell signals.
+    """
+    if idx < lookback:
+        return False
+    ema200 = df["Close"].iloc[idx - lookback:idx].mean()
+    current = df["Close"].iloc[idx]
+    # Price more than 1% above 200 EMA = strong uptrend, skip sells
+    return current > ema200 * 1.01
 # ── Signal logic ────────────────────────────────────────────────────
 
-def get_signal(row: pd.Series) -> dict | None:
+def get_signal(row: pd.Series, uptrend: bool = False) -> dict | None:
+
     """
     Apply your exact Skill 2 signal logic to a single candle.
     Returns signal dict or None if conditions not met.
@@ -92,9 +121,19 @@ def get_signal(row: pd.Series) -> dict | None:
     r1, r2, r3 = row["r1"], row["r2"], row["r3"]
     s1, s2, s3 = row["s1"], row["s2"], row["s3"]
 
+    adx = row.get("adx", 25)
+
+    # Skip if market is ranging — no clear trend
+    if pd.isna(adx) or adx < 18:
+        return None
+
     # Skip if any indicator is NaN
     if any(pd.isna(v) for v in [rsi, ema9, ema21, macd, sig, pivot]):
         return None
+
+    # adx = row.get("adx", 25)
+    # if pd.isna(adx) or adx < 18:
+    #     return None
 
     bullish_macd = macd > sig
     bearish_macd = macd < sig
@@ -102,7 +141,7 @@ def get_signal(row: pd.Series) -> dict | None:
     ema_bear     = ema9 < ema21
 
     # ── BUY conditions ──
-    if price > pivot and rsi < 70 and (ema_bull or bullish_macd):
+    if price > pivot and rsi < 65 and (ema_bull or bullish_macd):
         # Find nearest resistance above price
         r_levels = sorted([r for r in [r1, r2, r3] if r > price])
         s_levels = sorted([s for s in [s1, s2, s3] if s < price], reverse=True)
@@ -117,7 +156,7 @@ def get_signal(row: pd.Series) -> dict | None:
         risk   = price - stop_loss
         reward = target_1 - price
 
-        if risk <= 0 or reward / risk < 1.5:
+        if risk <= 0 or reward / risk < 1.2:
             return None
 
         return {
@@ -131,32 +170,33 @@ def get_signal(row: pd.Series) -> dict | None:
         }
 
     # ── SELL conditions ──
-    if price < pivot and rsi > 30 and (ema_bear or bearish_macd):
-        s_levels = sorted([s for s in [s1, s2, s3] if s < price], reverse=True)
-        r_levels = sorted([r for r in [r1, r2, r3] if r > price])
+    if not uptrend:
+        if price < pivot and rsi > 35 and (ema_bear or bearish_macd):
+            s_levels = sorted([s for s in [s1, s2, s3] if s < price], reverse=True)
+            r_levels = sorted([r for r in [r1, r2, r3] if r > price])
 
-        if not s_levels or not r_levels:
-            return None
+            if not s_levels or not r_levels:
+                return None
 
-        target_1  = s_levels[0]
-        target_2  = s_levels[1] if len(s_levels) > 1 else target_1 * 0.995
-        stop_loss = r_levels[0]
+            target_1  = s_levels[0]
+            target_2  = s_levels[1] if len(s_levels) > 1 else target_1 * 0.995
+            stop_loss = r_levels[0]
 
-        risk   = stop_loss - price
-        reward = price - target_1
+            risk   = stop_loss - price
+            reward = price - target_1
 
-        if risk <= 0 or reward / risk < 1.5:
-            return None
+            if risk <= 0 or reward / risk < 2.0:
+                return None
 
-        return {
-            "type"      : "SELL",
-            "entry"     : price,
-            "target_1"  : target_1,
-            "stop_loss" : stop_loss,
-            "risk"      : risk,
-            "reward"    : reward,
-            "rr"        : reward / risk,
-        }
+            return {
+                "type"      : "SELL",
+                "entry"     : price,
+                "target_1"  : target_1,
+                "stop_loss" : stop_loss,
+                "risk"      : risk,
+                "reward"    : reward,
+                "rr"        : reward / risk,
+            }
 
     return None
 
@@ -167,7 +207,7 @@ def check_outcome(
     df: pd.DataFrame,
     signal_idx: int,
     signal: dict,
-    max_candles: int = 48    # max 48 hours to hit target or stop
+    max_candles: int = 24    # max 24 hours to hit target or stop
 ) -> str:
     """
     Look forward from signal candle to see if target or stop is hit first.
@@ -206,7 +246,8 @@ def run_backtest():
     df = fetch_data()
     df = calculate_indicators(df)
     df = calculate_daily_pivots(df)
-    df = df.dropna(subset=["pivot", "rsi", "ema9", "ema21"])
+    df = df.dropna(subset=["pivot", "rsi", "ema9", "ema21", "adx"])
+    # df = df.dropna(subset=["pivot", "rsi", "ema9", "ema21"])
 
     print(f"  {len(df)} candles after indicator warmup\n")
 
@@ -222,7 +263,9 @@ def run_backtest():
             continue
 
         row    = df.iloc[i]
-        signal = get_signal(row)
+        uptrend = is_uptrend(df, i)
+        signal = get_signal(row, uptrend)
+        # signal = get_signal(row)
 
         if signal is None:
             continue
