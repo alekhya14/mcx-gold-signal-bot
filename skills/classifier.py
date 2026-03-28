@@ -109,37 +109,39 @@ SIGNAL RULES:
 
 STRONG BUY when ALL of these:
 - Price above daily pivot
-- RSI between 50-68 (bullish momentum, not overbought)
+- RSI between 50-65 (bullish momentum, not overbought)
 - EMA20 > EMA50 (medium term uptrend)
 - MACD bullish OR bullish crossover
-- ADX > 20 (trending market, not ranging)
-- Price above EMA200 (long term uptrend confirmed)
+- ADX > 18 (some trend present)
+- Price above EMA200 by at least 1% (strong uptrend confirmed)
 
 STRONG SELL when ALL of these:
 - Price below daily pivot
-- RSI between 32-50 (bearish momentum, not oversold)
+- RSI between 35-50 (bearish momentum, not oversold)
 - EMA20 < EMA50 (medium term downtrend)
 - MACD bearish OR bearish crossover
-- ADX > 20 (trending market)
-- Price below EMA200 (long term downtrend confirmed)
+- ADX > 18 (some trend present)
+- Price below EMA200 by at least 1% (strong downtrend confirmed)
+- NOTE: If price is above EMA200, do NOT generate SELL signals
 
 WEAK BUY when 3 of 5:
 - Price above pivot
 - RSI > 50
 - EMA20 > EMA50
 - MACD bullish
-- ADX > 20
+- ADX > 18
 
-WEAK SELL when 3 of 5:
+WEAK SELL when 3 of 5 AND price below EMA200:
 - Price below pivot
 - RSI < 50
 - EMA20 < EMA50
 - MACD bearish
-- ADX > 20
+- ADX > 18
 
 HOLD when:
-- RSI above 70 or below 30
-- ADX below 15 (no trend — ranging market, avoid)
+- RSI above 65 or below 35
+- ADX below 18 (ranging market — avoid all signals)
+- Price within 1% of EMA200 (transition zone — avoid)
 - Fewer than 3 conditions met
 
 TARGETS — use daily pivot levels:
@@ -153,8 +155,10 @@ TARGETS — use daily pivot levels:
 - SELL target 2 : S2
 - SELL stop loss: R1
 
-Minimum R/R: 1.5 for strong signals, 1.2 for weak signals.
-Return HOLD if R/R too poor.
+Minimum R/R:
+- BUY  signals: 1.2 minimum
+- SELL signals: 2.0 minimum (higher bar due to bull trend environment)
+- Return HOLD if R/R requirement not met
 
 Respond in JSON only, no preamble:
 {
@@ -171,11 +175,10 @@ Respond in JSON only, no preamble:
   "reason": "max 20 words",
   "key_level_triggered": "above daily pivot with EMA alignment",
   "rsi_note": "RSI 58 — bullish momentum",
-  "adx_note": "ADX 28 — strong trend confirmed",
+  "adx_note": "ADX 28 — trend confirmed",
   "trend_note": "price above 200 EMA — uptrend intact"
 }
 """
-
 
 SIGNAL_COMPOSER_SYSTEM = """
 You compose MCX gold trading alert messages. You receive a technical signal and a news signal.
