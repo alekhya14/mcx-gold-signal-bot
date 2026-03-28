@@ -14,6 +14,8 @@ from skills.classifier import (
     run_signal_composer,
 )
 from skills.notifier import handle_alert
+from skills.logger import log_run
+
 
 
 def build_price_data(gold_price: str, levels: dict | None, indicators: dict | None) -> str:
@@ -178,20 +180,41 @@ def run():
 
     print()
 
-    # Send intraday email
-    handle_alert(
-        alert      = intraday_alert,
-        gold_price = gold_price,
-        signal     = intraday_signal,
-        prefix     = "Intraday"
+    # Send alerts
+    intraday_sent = handle_alert(
+        alert=intraday_alert, gold_price=gold_price,
+        signal=intraday_signal, prefix="Intraday"
+    )
+    positional_sent = handle_alert(
+        alert=positional_alert, gold_price=gold_price,
+        signal=positional_signal, prefix="Positional"
     )
 
-    # Send positional email independently
-    handle_alert(
-        alert      = positional_alert,
-        gold_price = gold_price,
-        signal     = positional_signal,
-        prefix     = "Positional"
+    # Send intraday email
+    # handle_alert(
+    #     alert      = intraday_alert,
+    #     gold_price = gold_price,
+    #     signal     = intraday_signal,
+    #     prefix     = "Intraday"
+    # )
+    #
+    # # Send positional email independently
+    # handle_alert(
+    #     alert      = positional_alert,
+    #     gold_price = gold_price,
+    #     signal     = positional_signal,
+    #     prefix     = "Positional"
+    # )
+
+    log_run(
+        signal=intraday_signal, news=news, tech=intraday_tech,
+        gold_price=gold_price, alert_sent=intraday_sent,
+        full_alert=intraday_alert
+    )
+    log_run(
+        signal=positional_signal, news=news, tech=positional_tech,
+        gold_price=gold_price, alert_sent=positional_sent,
+        full_alert=positional_alert
     )
 
 if __name__ == "__main__":
