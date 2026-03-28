@@ -207,12 +207,12 @@ def run():
     # )
 
     log_run(
-        signal=intraday_signal, news=news, tech=intraday_tech,
+        signal=intraday_signal,signal_type="Intraday", news=news, tech=intraday_tech,
         gold_price=gold_price, alert_sent=intraday_sent,
         full_alert=intraday_alert
     )
     log_run(
-        signal=positional_signal, news=news, tech=positional_tech,
+        signal=positional_signal,signal_type="Positional", news=news, tech=positional_tech,
         gold_price=gold_price, alert_sent=positional_sent,
         full_alert=positional_alert
     )

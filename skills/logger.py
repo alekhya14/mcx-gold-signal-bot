@@ -3,6 +3,8 @@ import os
 from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
+from zoneinfo import ZoneInfo
+
 
 
 SCOPES = [
@@ -29,6 +31,7 @@ def get_sheet():
 
 def log_run(
     signal:      str,
+    signal_type: str,
     news:        dict,
     tech:        dict,
     gold_price:  str,
@@ -41,6 +44,7 @@ def log_run(
 
         row = [
             datetime.now().strftime('%d %b %Y %I:%M %p IST'),  # Timestamp
+            signal_type,
             signal,                                              # Signal (BUY/SELL/HOLD)
             news.get("direction", ""),                          # News direction
             news.get("urgency", ""),                            # Urgency score
