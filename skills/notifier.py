@@ -4,6 +4,7 @@ import json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from config import GMAIL_USER, GMAIL_APP_PASS, ALERT_EMAIL
 
 STATE_FILE = "bot_state.json"
@@ -46,6 +47,7 @@ def handle_alert(
 ) -> bool:
     state = load_state()
     now   = datetime.now(timezone.utc).timestamp()
+
     last  = state.get(f"last_email_ts_{prefix.lower()}", 0)
     mins_since_last = (now - last) / 60
 
@@ -56,7 +58,8 @@ def handle_alert(
     is_trade_signal = is_strong or is_weak or is_news or is_watch
     is_heartbeat_due = mins_since_last >= 60
 
-    timestamp = datetime.now().strftime('%d %b %Y, %I:%M %p IST')
+    # timestamp = datetime.now().strftime('%d %b %Y, %I:%M %p IST')
+    timestamp = datetime.now(ZoneInfo('Asia/Kolkata')).strftime('%d %b %Y, %I:%M %p IST')
 
     if is_trade_signal:
         if is_strong:

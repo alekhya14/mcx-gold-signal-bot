@@ -175,6 +175,7 @@ def run():
     print(positional_alert if positional_alert.strip() != "NO_ALERT"
           else "  No positional signal")
 
+
     print()
 
     # Send intraday email
