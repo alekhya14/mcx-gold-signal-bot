@@ -38,6 +38,9 @@ jobs:
           GMAIL_USER:         ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASS:     ${{ secrets.GMAIL_APP_PASS }}
           ALERT_EMAIL:        ${{ secrets.ALERT_EMAIL }}
+          GOOGLE_SHEETS_CREDS: ${{ secrets.GOOGLE_SHEETS_CREDS }}
+          GOOGLE_SHEET_NAME:   ${{ secrets.GOOGLE_SHEET_NAME }}
+          
         run: python main.py
 
       - name: Save bot state cache
