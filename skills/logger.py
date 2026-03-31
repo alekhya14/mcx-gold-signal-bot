@@ -43,7 +43,7 @@ def log_run(
         sheet = get_sheet()
 
         row = [
-            datetime.now().strftime('%d %b %Y %I:%M %p IST'),  # Timestamp
+            datetime.now(ZoneInfo('Asia/Kolkata')).strftime('%d %b %Y, %I:%M %p IST'),  # Timestamp
             signal_type,
             signal,                                              # Signal (BUY/SELL/HOLD)
             news.get("direction", ""),                          # News direction
